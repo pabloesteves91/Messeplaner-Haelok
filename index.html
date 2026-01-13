@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="de" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Haelok Messeplaner</title>
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  
+  <!-- Custom CSS -->
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    * {
+      font-family: 'DM Sans', sans-serif;
+    }
+    .gradient-bg {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%);
+    }
+    .card-glass {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+    }
+    .input-focus:focus {
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      transition: all 0.2s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      transform: none;
+      cursor: not-allowed;
+    }
+    .messe-card {
+      transition: all 0.2s ease;
+    }
+    .messe-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+    .tab-active {
+      border-bottom: 3px solid #3b82f6;
+      color: #3b82f6;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in {
+      animation: fadeIn 0.3s ease forwards;
+    }
+    .spinner {
+      border: 2px solid #ffffff40;
+      border-top: 2px solid #ffffff;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .link-button {
+      transition: all 0.2s ease;
+    }
+    .link-button:hover {
+      transform: translateX(2px);
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+  </style>
+</head>
+<body class="h-full gradient-bg">
+  <div id="app-container" class="h-full overflow-auto">
+    <div class="min-h-full p-4 md:p-6 lg:p-8">
+      <!-- Header -->
+      <header class="text-center mb-8 animate-in">
+        <div class="flex items-center justify-between mb-4">
+          <div id="logo-container" class="flex-shrink-0">
+            <div id="logo-placeholder" class="w-32 h-32 bg-white bg-opacity-10 rounded-xl flex items-center justify-center cursor-pointer hover:bg-opacity-20 transition-all" onclick="document.getElementById('logo-input').click()">
+              <svg class="w-12 h-12 text-blue-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <img id="logo-image" class="w-32 h-32 object-contain rounded-xl bg-white p-2 hidden cursor-pointer" onclick="document.getElementById('logo-input').click()" alt="Firmenlogo">
+            <input type="file" id="logo-input" accept="image/*" class="hidden" onchange="handleLogoUpload(event)">
+          </div>
+          <div class="flex-1 text-center">
+            <div class="inline-flex items-center gap-3 mb-2">
+              <svg class="w-10 h-10 text-blue-400" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+              </svg>
+              <h1 id="app-title" class="text-3xl md:text-4xl font-bold text-white">Haelok Messeplaner</h1>
+            </div>
+            <p id="app-subtitle" class="text-white text-lg">Aussteller Management</p>
+          </div>
+          <div class="w-32 flex-shrink-0"></div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <div class="max-w-6xl mx-auto">
+        <!-- Stats Bar -->
+        <div id="stats-bar" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="card-glass rounded-xl p-4 text-center">
+            <div class="text-3xl mb-2">📊</div>
+            <p class="text-gray-500 text-sm">Anzahl Messen</p>
+            <p id="stat-messen" class="text-2xl font-bold text-gray-800">0</p>
+          </div>
+          <div class="card-glass rounded-xl p-4 text-center">
+            <div class="text-3xl mb-2">💰</div>
+            <p class="text-gray-500 text-sm">Gesamtkosten (EUR)</p>
+            <p id="stat-kosten" class="text-2xl font-bold text-blue-600">0 €</p>
+          </div>
+          <div class="card-glass rounded-xl p-4 text-center">
+            <div class="text-3xl mb-2">📅</div>
+            <p class="text-gray-500 text-sm">Nächste Messe</p>
+            <p id="stat-naechste" class="text-lg font-bold text-green-600">-</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="card-glass rounded-t-xl border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <div class="flex flex-1">
+              <button id="tab-liste" class="flex-1 py-4 px-6 font-medium text-gray-600 hover:text-blue-600 tab-active" onclick="showTab('liste')">
+                Messen Liste
+              </button>
+              <button id="tab-neu" class="flex-1 py-4 px-6 font-medium text-gray-600 hover:text-blue-600" onclick="showTab('neu')">
+                Neue Messe
+              </button>
+            </div>
+            <div class="flex gap-2 pr-4">
+              <button onclick="exportToPDF()" class="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors text-sm flex items-center gap-2">
+                PDF
+              </button>
+              <button onclick="exportToExcel()" class="px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition-colors text-sm flex items-center gap-2">
+                Excel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="card-glass rounded-b-xl shadow-xl">
+          <!-- Liste Tab -->
+          <div id="content-liste" class="p-6">
+            <div id="messen-liste" class="space-y-4">
+              <div id="empty-state" class="text-center py-12">
+                <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18M9 21V9" />
+                </svg>
+                <p class="text-gray-500 text-lg">Noch keine Messen eingetragen</p>
+                <p class="text-gray-400 text-sm mt-1">Füge deine erste Messe hinzu</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Neue Messe Tab -->
+          <div id="content-neu" class="p-6 hidden">
+            <form id="messe-form" class="space-y-6">
+              <input type="hidden" id="edit_mode" value="false">
+              <input type="hidden" id="edit_id" value="">
+              
+              <!-- Basis Informationen -->
+              <div class="border-b border-gray-200 pb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Basis Informationen
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label for="messe_name" class="block text-sm font-medium text-gray-700 mb-1">Messename *</label>
+                    <input type="text" id="messe_name" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500" placeholder="z.B. IFA Berlin">
+                  </div>
+                  <div>
+                    <label for="standort" class="block text-sm font-medium text-gray-700 mb-1">Standort *</label>
+                    <input type="text" id="standort" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500" placeholder="z.B. Berlin">
+                  </div>
+                  <div>
+                    <label for="datum_von" class="block text-sm font-medium text-gray-700 mb-1">Datum von *</label>
+                    <input type="date" id="datum_von" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500">
+                  </div>
+                  <div>
+                    <label for="datum_bis" class="block text-sm font-medium text-gray-700 mb-1">Datum bis *</label>
+                    <input type="date" id="datum_bis" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500">
+                  </div>
+                  <div>
+                    <label for="branche" class="block text-sm font-medium text-gray-700 mb-1">Branche *</label>
+                    <select id="branche" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500">
+                      <option value="">Branche auswählen</option>
+                      <option value="Construction & Infrastructure">Construction & Infrastructure</option>
+                      <option value="Industry">Industry</option>
+                      <option value="Energy & Environment">Energy & Environment</option>
+                      <option value="Mobility & Transportation">Mobility & Transportation</option>
+                      <option value="Research & Hightech">Research & Hightech</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="land" class="block text-sm font-medium text-gray-700 mb-1">Land *</label>
+                    <select id="land" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500">
+                      <option value="">Land auswählen</option>
+                      <option value="Deutschland">Deutschland</option>
+                      <option value="Schweiz">Schweiz</option>
+                      <option value="Österreich">Österreich</option>
+                      <option value="Frankreich">Frankreich</option>
+                      <option value="Italien">Italien</option>
+                      <option value="Spanien">Spanien</option>
+                      <option value="Niederlande">Niederlande</option>
+                      <option value="Belgien">Belgien</option>
+                      <option value="UK">Vereinigtes Königreich</option>
+                      <option value="Polen">Polen</option>
+                      <option value="Tschechien">Tschechien</option>
+                      <option value="Schweden">Schweden</option>
+                      <option value="USA">USA</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="waehrung" class="block text-sm font-medium text-gray-700 mb-1">Währung *</label>
+                    <select id="waehrung" required class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500">
+                      <option value="EUR">EUR (Euro)</option>
+                      <option value="CHF">CHF (Schweizer Franken)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="messe_link" class="block text-sm font-medium text-gray-700 mb-1">Messe-Link</label>
+                    <input type="url" id="messe_link" class="w-full px-4 py-3 rounded-lg border border-gray-300 input-focus focus:outline-none focus:border-blue-500" placeholder="https://...">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Rest des Formulars bleibt gleich wie in Ihrer Vorlage -->
+              <!-- ... (Status & Organisation, Ansprechsperson, Stand Details, etc.) ... -->
+
+              <!-- Submit Button -->
+              <div class="flex justify-end gap-3">
+                <button type="button" onclick="cancelEdit()" class="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors">
+                  Abbrechen
+                </button>
+                <button type="submit" id="submit-btn" class="btn-primary px-8 py-3 rounded-lg text-white font-medium">
+                  <span id="submit-text">Messe speichern</span>
+                  <span id="submit-spinner" class="spinner hidden ml-2"></span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Detail Modal -->
+        <div id="detail-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+          <div class="card-glass rounded-2xl max-w-2xl w-full max-h-[90%] overflow-auto">
+            <div class="p-6">
+              <div class="flex justify-between items-start mb-6">
+                <h2 id="modal-title" class="text-2xl font-bold text-gray-800"></h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div id="modal-content" class="space-y-4"></div>
+              <div class="mt-6 pt-6 border-t border-gray-200 flex justify-between items-center">
+                <div class="flex gap-2">
+                  <button id="delete-btn" onclick="confirmDelete()" class="px-4 py-2 rounded-lg bg-red-100 text-red-600 font-medium hover:bg-red-200 transition-colors">
+                    Löschen
+                  </button>
+                  <button id="confirm-delete-btn" onclick="executeDelete()" class="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors hidden">
+                    Wirklich löschen?
+                  </button>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="editMesse()" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
+                    Bearbeiten
+                  </button>
+                  <button onclick="closeModal()" class="px-6 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors">
+                    Schließen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Limit Warning -->
+        <div id="limit-warning" class="hidden mt-4 p-4 bg-yellow-100 border border-yellow-400 rounded-lg text-yellow-800 text-center">
+          Maximale Anzahl von 999 Messen erreicht. Bitte lösche einige Einträge.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase Configuration -->
+  <script src="firebase-config.js"></script>
+  
+  <!-- Firebase Service -->
+  <script src="firestore-service.js"></script>
+  
+  <!-- Main Application Logic -->
+  <script>
+    // App State
+    let messenData = [];
+    let currentMesse = null;
+    let recordCount = 0;
+    let logoDataUrl = null;
+    let unsubscribeMessen = null;
+    let firestoreService = null;
+
+    // Firebase Konfiguration
+    const firebaseConfig = {
+      apiKey: "AIzaSyA40nCcZqPE04cOiMkARhqpvbYzG-6mxA0",
+      authDomain: "messeplaner.firebaseapp.com",
+      projectId: "messeplaner",
+      storageBucket: "messeplaner.firebasestorage.app",
+      messagingSenderId: "221723303982",
+      appId: "1:221723303982:web:d3ee7b56a7a3c6bd9bbfbf",
+      measurementId: "G-1FKHDMCE1Z"
+    };
+
+    // App initialisieren
+    async function initApp() {
+      try {
+        // Firebase initialisieren
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        
+        // Firestore Service initialisieren
+        firestoreService = new FirestoreService();
+        
+        // Logo laden
+        await loadLogo();
+        
+        // Messen laden und auf Änderungen hören
+        await loadMessen();
+        
+        // Echtzeit-Updates abonnieren
+        subscribeToMessenUpdates();
+        
+        console.log('App erfolgreich initialisiert');
+      } catch (error) {
+        console.error('Fehler bei der App-Initialisierung:', error);
+        showNotification('Fehler beim Verbinden mit der Datenbank', 'error');
+      }
+    }
+
+    // Echtzeit-Updates abonnieren
+    function subscribeToMessenUpdates() {
+      if (unsubscribeMessen) {
+        unsubscribeMessen();
+      }
+      
+      unsubscribeMessen = firestoreService.subscribeToMessen((messen) => {
+        messenData = messen;
+        recordCount = messen.length;
+        renderMessen();
+        updateStats();
+        checkLimit();
+      });
+    }
+
+    // Logo laden
+    async function loadLogo() {
+      try {
+        const logoUrl = await firestoreService.getLogo();
+        if (logoUrl) {
+          logoDataUrl = logoUrl;
+          document.getElementById('logo-placeholder').classList.add('hidden');
+          const logoImg = document.getElementById('logo-image');
+          logoImg.src = logoUrl;
+          logoImg.classList.remove('hidden');
+          showNotification('Logo erfolgreich geladen', 'success');
+        }
+      } catch (error) {
+        console.log('Kein Logo gefunden, verwende Standard');
+      }
+    }
+
+    // Logo hochladen
+    async function handleLogoUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        showNotification('Bitte nur Bilddateien hochladen', 'warning');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        showNotification('Datei ist zu groß (max. 5MB)', 'warning');
+        return;
+      }
+
+      const submitBtn = document.getElementById('submit-btn');
+      const submitText = document.getElementById('submit-text');
+      const submitSpinner = document.getElementById('submit-spinner');
+
+      submitBtn.disabled = true;
+      submitText.textContent = 'Lade Logo hoch...';
+      submitSpinner.classList.remove('hidden');
+
+      try {
+        const result = await firestoreService.uploadLogo(file);
+        logoDataUrl = result.url;
+        
+        document.getElementById('logo-placeholder').classList.add('hidden');
+        const logoImg = document.getElementById('logo-image');
+        logoImg.src = result.url;
+        logoImg.classList.remove('hidden');
+        
+        showNotification('Logo erfolgreich hochgeladen', 'success');
+      } catch (error) {
+        console.error('Fehler beim Hochladen des Logos:', error);
+        showNotification('Fehler beim Hochladen des Logos', 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitText.textContent = 'Messe speichern';
+        submitSpinner.classList.add('hidden');
+      }
+    }
+
+    // Messen laden
+    async function loadMessen() {
+      try {
+        messenData = await firestoreService.getAllMessen();
+        recordCount = messenData.length;
+        renderMessen();
+        updateStats();
+        checkLimit();
+      } catch (error) {
+        console.error('Fehler beim Laden der Messen:', error);
+        showNotification('Fehler beim Laden der Messen', 'error');
+      }
+    }
+
+    // Formular absenden
+    document.getElementById('messe-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const editMode = document.getElementById('edit_mode').value === 'true';
+      const messeId = document.getElementById('edit_id').value;
+
+      if (!editMode && recordCount >= 999) {
+        showNotification('Maximale Anzahl von 999 Messen erreicht', 'warning');
+        return;
+      }
+
+      const submitBtn = document.getElementById('submit-btn');
+      const submitText = document.getElementById('submit-text');
+      const submitSpinner = document.getElementById('submit-spinner');
+
+      submitBtn.disabled = true;
+      submitText.textContent = editMode ? 'Speichere...' : 'Speichere...';
+      submitSpinner.classList.remove('hidden');
+
+      try {
+        const formData = {
+          messe_name: document.getElementById('messe_name').value || '',
+          messe_link: document.getElementById('messe_link').value || '',
+          standort: document.getElementById('standort').value || '',
+          land: document.getElementById('land').value || '',
+          datum_von: document.getElementById('datum_von').value || '',
+          datum_bis: document.getElementById('datum_bis').value || '',
+          waehrung: document.getElementById('waehrung').value || 'EUR',
+          branche: document.getElementById('branche').value || '',
+          status: document.getElementById('status').value || 'Notiert',
+          verantwortlich: document.getElementById('verantwortlich').value || '',
+          teilnahme_art: document.getElementById('teilnahme_art').value || '',
+          rechnung_bezahlt: document.getElementById('rechnung_bezahlt').value || 'Nein',
+          rechnung_faellig: document.getElementById('rechnung_faellig').value || '',
+          ansprechperson_name: document.getElementById('ansprechperson_name').value || '',
+          ansprechperson_email: document.getElementById('ansprechperson_email').value || '',
+          ansprechperson_telefon: document.getElementById('ansprechperson_telefon').value || '',
+          stand_nummer: document.getElementById('stand_nummer').value || '',
+          stand_groesse: document.getElementById('stand_groesse').value || '',
+          stand_kosten: parseFloat(document.getElementById('stand_kosten').value) || 0,
+          strom_kosten: parseFloat(document.getElementById('strom_kosten').value) || 0,
+          wasser_kosten: parseFloat(document.getElementById('wasser_kosten').value) || 0,
+          personal_anzahl: parseFloat(document.getElementById('personal_anzahl').value) || 0,
+          personal_kosten: parseFloat(document.getElementById('personal_kosten').value) || 0,
+          anreise_kosten: parseFloat(document.getElementById('anreise_kosten').value) || 0,
+          unterkunft_kosten: parseFloat(document.getElementById('unterkunft_kosten').value) || 0,
+          marketing_kosten: parseFloat(document.getElementById('marketing_kosten').value) || 0,
+          sonstige_kosten: parseFloat(document.getElementById('sonstige_kosten').value) || 0,
+          produkt_preise: document.getElementById('produkt_preise').value || '',
+          notizen: document.getElementById('notizen').value || '',
+          datei_referenzen: document.getElementById('datei_referenzen').value || ''
+        };
+
+        let result;
+        if (editMode && messeId) {
+          result = await firestoreService.updateMesse(messeId, formData);
+          showNotification('Messe erfolgreich aktualisiert', 'success');
+        } else {
+          result = await firestoreService.createMesse(formData);
+          showNotification('Messe erfolgreich gespeichert', 'success');
+        }
+
+        resetForm();
+        showTab('liste');
+        
+      } catch (error) {
+        console.error('Fehler beim Speichern:', error);
+        showNotification('Fehler beim Speichern: ' + error.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitText.textContent = editMode ? 'Änderungen speichern' : 'Messe speichern';
+        submitSpinner.classList.add('hidden');
+      }
+    });
+
+    // Messe löschen
+    async function executeDelete() {
+      if (!currentMesse) return;
+
+      const btn = document.getElementById('confirm-delete-btn');
+      btn.disabled = true;
+      btn.textContent = 'Lösche...';
+
+      try {
+        await firestoreService.deleteMesse(currentMesse.id);
+        showNotification('Messe erfolgreich gelöscht', 'success');
+        closeModal();
+      } catch (error) {
+        console.error('Fehler beim Löschen:', error);
+        showNotification('Fehler beim Löschen: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Wirklich löschen?';
+      }
+    }
+
+    // Messe bearbeiten
+    function editMesse() {
+      if (!currentMesse) return;
+
+      // Formular mit aktuellen Daten füllen
+      document.getElementById('edit_mode').value = 'true';
+      document.getElementById('edit_id').value = currentMesse.id;
+      document.getElementById('messe_name').value = currentMesse.messe_name || '';
+      // ... alle anderen Felder entsprechend füllen ...
+
+      // Währung-Labels aktualisieren
+      const currency = currentMesse.waehrung || 'EUR';
+      document.querySelectorAll('.currency-label').forEach(label => {
+        label.textContent = currency;
+      });
+
+      // Link-Vorschau aktualisieren
+      updateLinkPreview();
+
+      // Submit-Button Text aktualisieren
+      document.getElementById('submit-text').textContent = 'Änderungen speichern';
+
+      // Modal schließen und zum Formular wechseln
+      closeModal();
+      showTab('neu');
+      
+      // Nach oben scrollen
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Helper-Funktionen (bleiben größtenteils gleich wie in Ihrer Vorlage)
+    function showTab(tab) {
+      // ... bleibt gleich ...
+    }
+
+    function renderMessen() {
+      // ... bleibt gleich, aber verwendet jetzt messenData aus Firebase ...
+    }
+
+    function createMesseCard(messe) {
+      // ... bleibt gleich ...
+    }
+
+    function openDetail(id) {
+      currentMesse = messenData.find(m => m.id === id);
+      // ... bleibt gleich ...
+    }
+
+    function closeModal() {
+      // ... bleibt gleich ...
+    }
+
+    function confirmDelete() {
+      // ... bleibt gleich ...
+    }
+
+    function resetForm() {
+      // ... bleibt gleich ...
+    }
+
+    function cancelEdit() {
+      // ... bleibt gleich ...
+    }
+
+    // Weitere Hilfsfunktionen (updateLinkPreview, parseLinks, calculateTotal, etc.)
+    // ... bleiben größtenteils gleich wie in Ihrer Vorlage ...
+
+    // App starten
+    document.addEventListener('DOMContentLoaded', () => {
+      initApp();
+    });
+
+    // Beim Verlassen der Seite Listener entfernen
+    window.addEventListener('beforeunload', () => {
+      if (unsubscribeMessen) {
+        unsubscribeMessen();
+      }
+    });
+  </script>
+</body>
+</html>

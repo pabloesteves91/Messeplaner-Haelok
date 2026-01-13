@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allgemeine Regeln für alle Sammlungen
+    match /{document=**} {
+      // Standard: Lesen und Schreiben für alle erlauben (für Test)
+      // In Produktion sollte hier Authentifizierung hinzugefügt werden
+      allow read, write: if true;
+    }
+  }
+}
